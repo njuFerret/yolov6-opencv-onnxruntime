@@ -1,16 +1,20 @@
 import cv2
 import argparse
 import numpy as np
+import pathlib
+
+root = pathlib.Path(__file__).parent
+
 
 class yolov6():
     def __init__(self, modelpath, confThreshold=0.5, nmsThreshold=0.5):
-        self.classes = list(map(lambda x:x.strip(), open('coco.names', 'r').readlines()))
+        self.classes = list(map(lambda x: x.strip(), open(root / 'coco.names', 'r').readlines()))
         # self.num_classes = len(self.classes)
         self.inpHeight, self.inpWidth = 640, 640
         self.net = cv2.dnn.readNet(modelpath)
         self.confThreshold = confThreshold
         self.nmsThreshold = nmsThreshold
-        self.keep_ratio=True
+        self.keep_ratio = True
 
     def resize_image(self, srcimg):
         top, left, newh, neww = 0, 0, self.inpWidth, self.inpHeight
@@ -66,14 +70,33 @@ class yolov6():
                     classIds.append(classId)
         # Perform non maximum suppression to eliminate redundant overlapping boxes with
         # lower confidences.
+        # indices = cv2.dnn.NMSBoxes(boxes, confidences, self.confThreshold, self.nmsThreshold).flatten()
+        # for i in indices:
+        #     box = boxes[i]
+        #     left = box[0]
+        #     top = box[1]
+        #     width = box[2]
+        #     height = box[3]
+        #     frame = self.drawPred(frame, classIds[i], confidences[i], left, top, left + width, top + height)
+
         indices = cv2.dnn.NMSBoxes(boxes, confidences, self.confThreshold, self.nmsThreshold).flatten()
-        for i in indices:
-            box = boxes[i]
-            left = box[0]
-            top = box[1]
-            width = box[2]
-            height = box[3]
-            frame = self.drawPred(frame, classIds[i], confidences[i], left, top, left + width, top + height)
+
+        _boxes = [boxes[idx] for idx in indices]
+        _cids = [classIds[idx] for idx in indices]
+        _cfds = [confidences[idx] for idx in indices]
+
+        for (box, cid, confidence) in zip(_boxes, _cids, _cfds):
+            left, top, width, height = box
+            frame = self.drawPred(frame, cid, confidence, left, top, left + width, top + height)
+
+        # for i in indices:
+        #     box = boxes[i]
+        #     left = box[0]
+        #     top = box[1]
+        #     width = box[2]
+        #     height = box[3]
+        #     frame = self.drawPred(frame, classIds[i], confidences[i], left, top, left + width, top + height)
+
         return frame
 
     def drawPred(self, frame, classId, conf, left, top, right, bottom):
@@ -102,6 +125,7 @@ class yolov6():
         srcimg = self.postprocess(srcimg, outs, padsize=(newh, neww, padh, padw))
         return srcimg
 
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--imgpath', type=str, default='images/image1.jpg', help="image path")
@@ -110,8 +134,10 @@ if __name__ == "__main__":
     parser.add_argument('--nmsThreshold', default=0.5, type=float, help='nms iou thresh')
     args = parser.parse_args()
 
-    yolonet = yolov6(args.modelpath, confThreshold=args.confThreshold, nmsThreshold=args.nmsThreshold)
-    srcimg = cv2.imread(args.imgpath)
+    p = root.parent / args.modelpath
+
+    yolonet = yolov6(p.as_posix(), confThreshold=args.confThreshold, nmsThreshold=args.nmsThreshold)
+    srcimg = cv2.imread(f'{root / args.imgpath}')
     srcimg = yolonet.detect(srcimg)
 
     winName = 'Deep learning object detection in OpenCV'
